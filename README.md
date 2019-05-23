@@ -256,7 +256,7 @@ es = Elasticsearch({"host": "localhost", "port": 9200})
  ```
 
 - python简单使用 <https://cuiqingcai.com/6214.html>
-- my project's one part, 
+- my project's one part, https://github.com/shaowei1/ik-elasticsearch/blob/master/es.py
 
 # 参考
 
