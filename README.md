@@ -92,9 +92,12 @@ docker images -a
 ## run es image
 
 ```bash
+# -p 映射本地的9200和9300端口到docker container的9200和9300端口
+# -e Set environment variables,
+# discovery.type=single-node  Elasticsearch以单节点的形式运行
 docker run -p 9200:9200 -p 9300:9300 -e "discovery.type=single-node" es:0.1
 
-# 新窗口test: 
+# 打开新窗口test: 
 curl http://127.0.0.1:9200/_cat/health
 curl http://localhost:9200/
 # 默认情况下，Elastic 只允许本机访问，如果需要远程访问，可以修改 Elastic 安装目录的config/elasticsearch.yml文件，去掉network.host的注释，将它的值改成0.0.0.0，然后重新启动 Elastic。
@@ -102,7 +105,7 @@ curl http://localhost:9200/
 
 
 
-## add plugins to es
+## add ik plugins to es
 
 ```bash
 # 1.查看容器，得到CONTAINER ID
@@ -133,9 +136,8 @@ docker run -p 9200:9200 -p 9300:9300 -e "discovery.type=single-node" es:0.1
 
 
 1. curl 是一个发起网络请求的命令, -X是指发起请求的方式,  -H 后面是请求体的format, -d 是我们传递给es的数据
-
 2. Elasticsearch 默认运行在9200端口
-3. Elasticsearch提供网络接口，可以通过HTTP请求创建index(相当于数据库)，插入数据; 内部做存储和分析插入的数据; 再通过HTTP请求进行search数据
+3. Elasticsearch提供RESTful网络接口，可以通过HTTP请求创建index，在index中插入数据; 内部做存储和分析插入的数据; 再通过HTTP请求进行search数据
 
 ```bash
 # 举例 1.create a index （create一个名为"index"的index, index唯一，再次创建会报错)
@@ -157,7 +159,7 @@ curl -XPOST http://localhost:9200/index/_mapping -H 'Content-Type:application/js
 
 }'
 
-# 3.index some docs (给index库添加Document, 里面只有一个"content" Field)
+# 3.index some docs (给index库添加Document, 里面只有一个Field "content" )
 # curl -XPOST http://localhost:9200/index_name/operate_method/id      (id是这个Document的唯一标识符)
 # 如果自定义字典参数，需要格式为UTF8编码
 curl -XPOST http://localhost:9200/index/_create/1 -H 'Content-Type:application/json' -d'
@@ -173,7 +175,7 @@ curl -XPOST http://localhost:9200/index/_create/4 -H 'Content-Type:application/j
 {"content":"中国驻洛杉矶领事馆遭亚裔男子枪击 嫌犯已自首"}
 '
 
-# 4.query with highlighting (根据关键词检索)
+# 4.query with highlighting (根据关键词检索， 匹配"content"字段包含“中国”的Document)
 curl -XPOST http://localhost:9200/index/_search  -H 'Content-Type:application/json' -d'
 {
     "query" : { "match" : { "content" : "中国" }},
@@ -238,13 +240,13 @@ curl -XPOST http://localhost:9200/index/_search  -H 'Content-Type:application/js
 # python use
 pip elasticsearch==6.3.1
 
-- python的elasticsearch模块对上面的请求方式做了一次封装，不需要使用post发送HTTP请求，直接提供了方法操作elastic
+- python的elasticsearch模块对上面的请求方式做了一次封装，不需要使用post发送HTTP请求，es实例直接提供了方法操作elastic
 ```python
 from elasticsearch import Elasticsearch
 es = Elasticsearch({"host": "localhost", "port": 9200})
 ```
 
-- 更上面结构类似es有create, update, search, delete等几个方法
+- es实例有create, delete, update, search 等几个方法,分别是增删改查
  - 参数: index=str()   必须小写, doc_type=str(), body=dict(), refresh=Bool(), id=int()
 
  ```python
