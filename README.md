@@ -71,6 +71,12 @@ sudo systemctl start docker
 
 sudo docker -v
 # Docker version 18.06.1-ce, build e68fc7a ==> 代表 success 
+
+# if is root, ignore the following
+# the Docker daemon binds to a Unix socket instead of a TCP port. By default that Unix socket is owned by the user root and other users can only access it using sudo, the Docker daemon always runs as the root user.
+sudo groupadd docker # create the docker group
+sudo usermod -aG docker $USER # add your user to the docker group
+# login out && login in
 ```
 
 ## install elasticsearch
