@@ -26,15 +26,19 @@ es相当于 Lucene 的一层封装，它提供了一套简单一致的 RESTful A
 
 Elasticsearch 本质上是一个分布式数据库，允许多台服务器协同工作，每台服务器可以运行多个 Elasticsearch 实例。
 
-单个 Elasticsearch 实例称为一个节点（Node）。一组节点构成一个集群（Cluster）。
+单个 Elasticsearch 实例称为一个节点（Node）。一组节点构成一个集群（Cluster, 由名称唯一标识）。
 
 ### Index
+
+Document的集合
 
 Elasticsearch 会索引所有字段，经过处理后写入一个反向索引（Inverted Index）。查找数据的时候，直接查找该索引。
 
 所以，Elasticsearch 数据管理的顶层单位就叫做 Index（索引),每个 Index 的名字必须是小写。
 
 ### Document
+
+能被索引的基础单元
 
 Index 里面单条的记录称为 Document（文档）。许多条 Document 构成了一个 Index。
 
@@ -53,6 +57,20 @@ Document 可以分组，比如 weather 这个 Index 里面，可以按城市分�
 ### Fields
 
 即字段，每个 Document 都类似一个 JSON 结构，它包含了许多字段，每个字段都有其对应的值，多个字段组成了一个 Document.
+
+## shard
+
+索引的物理分区，是一个最小的 Lucene 索引单元。分为 primary shard(主分片) 和 replica shard(简称replicas)。
+
+- 可以水平切分和扩展内容容量
+- 在shards 间分发和并行执行操作，从而提供性能和吞吐量
+
+## replicas
+
+副本/备份(replicas)：主分片的备份
+
+- 当 shard 失效时提供高可用性。因为这个原因，一个primary shard的replica不会分配到和该shard所处的同一节点
+- 扩展查询的容量/吞吐量，因为查询操作是一个读操作，可以在所有replica上并行执行
 
 ![](./img/compare.png)
 
