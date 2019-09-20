@@ -105,6 +105,10 @@ mkdir es && cd es
 touch Dockerfile
 # 在Dockerfile 中写下面的一句话, 不要#
 # FROM docker.elastic.co/elasticsearch/elasticsearch:7.1.0@sha256:802b6a299260dbaf21a9c57e3a634491ff788a1ea13a51598d4cd105739509c4
+# 自动添加elasticsearch-ik
+# RUN ./bin/elasticsearch-plugin install https://github.com/medcl/elasticsearch-analysis-ik/releases/download/v7.1.0/elasticsearch-analysis-ik-7.1.0.zip
+# 或者
+# RUN wget -c --tries=0 -O /tmp/elasticsearch-analysis-ik.zip https://github.com/medcl/elasticsearch-analysis-ik/releases/download/v7.1.0/elasticsearch-analysis-ik-7.1.0.zip && mkdir /usr/share/elasticsearch/plugins/ik && unzip /tmp/elasticsearch-analysis-ik.zip -d /usr/share/elasticsearch/plugins/ik && rm -rf /tmp/elasticsearch-analysis-ik.zip
 
 2. 
 # 编译es镜像
@@ -121,15 +125,32 @@ docker images -a
 # discovery.type=single-node  Elasticsearch以单节点的形式运行
 docker run -p 9200:9200 -p 9300:9300 -e "discovery.type=single-node" es:0.1
 
+# 设置jvm.options设置JVM堆通道的大小, 默认2G,所设置的值取决于你的服务器的可用内存大小.
+# docker run -d --name elasticsearch-ik -p 9200:9200 -p 9300:9300 -e "ES_JAVA_OPTS=-Xms256m -Xmx256m" -e "discovery.type=single-node" es:0.1
+
 # 打开新窗口test: 
 curl http://127.0.0.1:9200/_cat/health
 curl http://localhost:9200/
 # 默认情况下，Elastic 只允许本机访问，如果需要远程访问，可以修改 Elastic 安装目录的config/elasticsearch.yml文件，去掉network.host的注释，将它的值改成0.0.0.0，然后重新启动 Elastic。
 ```
 
+> > - 最小堆的大小和最大堆的大小应该相等。
+> >
+> > - Elasticsearch可获得越多的堆，并且内存也可以使用更多的缓存。但是需要注意，分配了太多的堆给你的项目，将会导致有长时间的垃圾搜集停留。
+> >
+> > - 设置最大堆的值不能超过你物理内存的50%，要确保有足够多的物理内存来保证内核文件缓存。
+> >
+> > - 不要将最大堆设置高于JVM用于压缩对象指针的截止值。确切的截止值是有变化，但接近32gb。您可以通过在日志中查找以下内容来验证您是否处于限制以下:
+> >
+> >   heap size [1.9gb], compressed ordinary object pointers [true]
+> >
+> > - 最好尝试保持在基于零压缩oops的阈值以下;当确切的截止值在大多数时候处于26GB是安全的。但是在大多数系统中也可以等于30GB。在启动Elasticsearch之后，你也可以在JVM参数中验证这个限制`-XX:+UnlockDiagnosticVMOptions -XX:+PrintCompressedOopsMode`和查询类似于下面这一行：
+> >
+> >   ```html
+> >   
+> >   ```
 
-
-## add ik plugins to es
+## 手动 add ik plugins to es
 
 ```bash
 # 1.查看容器，得到CONTAINER ID
@@ -146,11 +167,12 @@ wget https://github.com/medcl/elasticsearch-analysis-ik/releases/download/v7.1.0
 # 4. 解压到ik目录下
 unzip elasticsearch-analysis-ik-7.1.0.zip -d ik/
 
+
 # 5. 退出容器, 快捷键
 # ctrl + p + q 
 
 # 6. ctrl + c 重启容器
-docker run -p 9200:9200 -p 9300:9300 -e "discovery.type=single-node" es:0.1 
+docker restart es:0.1
 ```
 
 ## test ik-es
@@ -281,21 +303,69 @@ es = Elasticsearch({"host": "localhost", "port": 9200})
 # 如果再执行返回失败 status=400, 因为index已经存在
  ```
 
-- python简单使用 <https://cuiqingcai.com/6214.html>
-- my project's one part, https://github.com/shaowei1/ik-elasticsearch/blob/master/es.py
+# Es 迁移
+
+- elasticsearch-dump
+- snapshot
+- reindex
+- logstash
+
+## elasticsearch-dump
+
+### 适用场景
+
+适合数据量不大，迁移索引个数不多的场景  
+
+[github]: https://github.com/taskrabbit/elasticsearch-dump
+
+1. install
+
+```
+docker pull taskrabbit/elasticsearch-dump
+```
+
+​	2 . 主要参数说明
+
+```js
+	    --input: 源地址，可为ES集群URL、文件或stdin,可指定索引，格式为：{protocol}://{host}:{port}/{index}
+	    --input-index: 源ES集群中的索引
+	    --output: 目标地址，可为ES集群地址URL、文件或stdout，可指定索引，格式为：{protocol}://{host}:{port}/{index}
+	    --output-index: 目标ES集群的索引
+	    --type: 迁移类型，默认为data,表明只迁移数据，可选settings, analyzer, data, mapping, alias
+	    --limit：每次向目标ES集群写入数据的条数，不可设置的过大，以免bulk队列写满
+```
+
+3. 迁移
+
+```bash
+# Copy an index from production to staging with mappings:
+docker run --rm -ti taskrabbit/elasticsearch-dump \
+  --input=http://production.es.com:9200/my_index \
+  --output=http://staging.es.com:9200/my_index \
+  --type=mapping
+docker run --rm -ti taskrabbit/elasticsearch-dump \
+  --input=http://production.es.com:9200/my_index \
+  --output=http://staging.es.com:9200/my_index \
+  --type=data
+# 注意第一条命令先将索引的settings先迁移，如果直接迁移mapping或者data将失去原有集群中索引的配置信息如分片数量和副本数量等，当然也可以直接在目标集群中将索引创建完毕后再同步mapping与data
+
+# Backup index data to a file:
+docker run --rm -ti -v /data:/tmp taskrabbit/elasticsearch-dump \
+  --input=http://production.es.com:9200/my_index \
+  --output=/tmp/my_index_mapping.json \
+  --type=data
+```
+
+
 
 # 参考
 
-<https://elasticsearch-py.readthedocs.io/en/master/>
-
-中文文档 <https://es.xiaoleilu.com/index.html>
-
-<http://www.ruanyifeng.com/blog/2017/08/elasticsearch.html>
+<https://github.com/taskrabbit/elasticsearch-dump/> 
 
 <https://www.elasticsearch.cn/>
 
 <https://github.com/elastic/elasticsearch-py>
 
-
+<https://cloud.tencent.com/developer/article/1145944/>
 
 query API文档 <https://www.elastic.co/guide/en/elasticsearch/reference/current/query-dsl.html>
